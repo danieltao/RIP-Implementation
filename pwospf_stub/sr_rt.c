@@ -187,6 +187,7 @@ void sr_print_routing_table(struct sr_instance* sr)
             sr_print_routing_entry(rt_walker);
         rt_walker = rt_walker->next;
     }
+    printf("finish printing\n");
     pthread_mutex_unlock(&(sr->rt_lock));
 
 
@@ -252,6 +253,7 @@ void *sr_rip_timeout(void *sr_ptr) {
     struct sr_instance *sr = sr_ptr;
     while (1) {
         sleep(5);
+        printf("Called rip timeout");
         pthread_mutex_lock(&(sr->rt_lock));
         /*send the RIP response packets periodically. check the routing table and remove expired route entry. If a route entry is not updated in 20 seconds, we will think it is expired. */
         /* todo: garbage collection*/
@@ -299,6 +301,8 @@ void send_rip_request(struct sr_instance *sr){
     /* You should send RIP request packets using UDP broadcast here.
      * This function is called when the program started.
 */
+
+    printf("Called rip request\n");
 	struct sr_if * interface;
 	interface = sr -> if_list;
 
@@ -313,6 +317,7 @@ void send_rip_request(struct sr_instance *sr){
 		packet -> entries[0].metric = 16;
 		packet -> entries[0].tag = 0;
 		packet -> entries[0].next_hop = 0;
+
 		/* config udp header */
 		sr_udp_hdr_t *udp = (sr_udp_hdr_t *) malloc(sizeof(sr_udp_hdr_t));
 		udp -> port_src = 520;
@@ -320,6 +325,7 @@ void send_rip_request(struct sr_instance *sr){
 		udp -> udp_len = htons(sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t));
 		udp -> udp_sum = 0;
 		udp -> udp_sum = udp_checksum(udp, sizeof(sr_udp_hdr_t)+sizeof(sr_rip_pkt_t), interface->ip, 0xe0000009 /*224.0.0.9*/);
+
 		/* config IP header */
 		sr_ip_hdr_t *ip_packet;
 		ip_packet = (sr_ip_hdr_t*) malloc(sizeof(sr_ip_hdr_t));
@@ -338,9 +344,12 @@ void send_rip_request(struct sr_instance *sr){
 		/* config ether header */
 		struct sr_ethernet_hdr *ether_packet;
 		ether_packet = (sr_ethernet_hdr_t*)malloc(sizeof(sr_ethernet_hdr_t));
-		memcpy(ether_packet->ether_dhost, 255, ETHER_ADDR_LEN);
+		memset(ether_packet->ether_dhost, 255, ETHER_ADDR_LEN);
 		memcpy(ether_packet->ether_shost, interface->addr, ETHER_ADDR_LEN);
 		ether_packet->ether_type = htons(ethertype_ip);
+		printf("interface address is %x \n", ether_packet->ether_shost);
+		printf("interface name is %s \n", interface->name);
+		printf("the interface value from get interface is %x \n", sr_get_interface(sr, interface->name));
 
 		/* combine everything together */
 		uint8_t * msg = malloc(sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t) + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
@@ -350,8 +359,8 @@ void send_rip_request(struct sr_instance *sr){
 		msg += sizeof(sr_ip_hdr_t);
 		memcpy(msg, udp, sizeof(sr_udp_hdr_t));
 		memcpy(msg + sizeof(sr_udp_hdr_t), packet, sizeof(sr_rip_pkt_t));
-
-		sr_send_packet(sr, msg, sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t)+ sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), interface -> name);
+		printf("the truth value is %d \n",memcpy(ether_packet->ether_shost, sr_get_interface(sr, interface->name), ETHER_ADDR_LEN));
+		sr_send_packet(sr, msg, sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t)+ sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), interface->name);
 
 		/* garbage collection*/
 		free(msg);
@@ -368,6 +377,8 @@ void send_rip_request(struct sr_instance *sr){
 void send_rip_update(struct sr_instance *sr){
     pthread_mutex_lock(&(sr->rt_lock));
     /*You should call it when you receive a RIP request packet or in the sr_rip_timeout function. You should enable split horizon here to prevent count-to-infinity problem. */
+
+    printf("Called rip update");
     /* broadcast */
     struct sr_if * bi;
     bi = sr -> if_list;
@@ -449,6 +460,7 @@ void send_rip_update(struct sr_instance *sr){
 
 void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_pkt_t* rip_packet, char* iface){
     pthread_mutex_lock(&(sr->rt_lock));
+    printf("Called update route table");
     uint32_t src_addr = ip_packet->ip_src;
 
     uint32_t rt_dst;
