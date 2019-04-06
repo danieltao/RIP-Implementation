@@ -39,40 +39,6 @@ struct sr_rt
     struct sr_rt* next;
 };
 
-/* ----------------------------------------------------------------------------
- * struct sr_udp_hdr
- *
- * udp header
- *
- * -------------------------------------------------------------------------- */
-struct sr_udp_hdr {
-    uint16_t port_src, port_dst; /* source and destination port_number */
-    uint16_t udp_len;			/* total length */
-    uint16_t udp_sum;			/* checksum */
-} __attribute__ ((packed)) ;
-typedef struct sr_udp_hdr sr_udp_hdr_t;
-
-/* ----------------------------------------------------------------------------
- * struct sr_rip_pkt
- *
- * rip packet
- *
- * -------------------------------------------------------------------------- */
-struct sr_rip_pkt {
-	uint8_t command;
-	uint8_t version;
-	uint16_t unused;
-	struct entry{
-		uint16_t afi; /* Address Family Identifier */
-		uint16_t tag; /*Route Tag */
-		uint32_t address; /* IP Address */
-		uint32_t mask; /* Subnet Mask */
-		uint32_t next_hop; /* Next Hop */
-		uint32_t metric; /* Metric */
-		} entries[MAX_NUM_ENTRIES]; /* #define MAX_NUM_ENTRIES 25 */
-} __attribute__ ((packed)) ;
-typedef struct sr_rip_pkt sr_rip_pkt_t;
-
 int sr_build_rt(struct sr_instance*);
 int sr_load_rt(struct sr_instance*,const char*);
 void sr_add_rt_entry(struct sr_instance*, struct in_addr,struct in_addr,

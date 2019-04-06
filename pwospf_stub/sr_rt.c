@@ -382,7 +382,7 @@ void send_rip_update(struct sr_instance *sr){
 		packet -> version = 2;
 		while(rt){
 			/* split horizon ----- double check*/
-			if((rt -> mask.s_addr & rt->gw.s_addr) == (rt -> mask.s_addr & rt->dest.s_addr) & strcmp(rt -> interface, bi -> name)){
+			if(strcmp(rt -> interface, bi -> name)){
 				/* if next hop and destination is in the same subnet, and I am sending the package to the next hop router*/
 				rt = rt->next;
 				continue;

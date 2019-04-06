@@ -26,7 +26,10 @@
 #define Debug(x, args...) do{}while(0)
 #define DebugMAC(x) do{}while(0)
 #endif
-
+#define TTL_EXCEEDED           1
+#define DEST_HOST_UNREACHABLE  2
+#define DEST_NET_UNREACHABLE   3
+#define PORT_UNREACHABLE       4
 #define INIT_TTL 255
 #define PACKET_DUMP_SIZE 1024
 
