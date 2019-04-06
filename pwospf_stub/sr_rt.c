@@ -265,8 +265,10 @@ void *sr_rip_timeout(void *sr_ptr) {
 			continue;
 		}
 
+		int expiretime = 2000;
+
 		rt_walker_prev = sr->routing_table;
-		while(rt_walker_prev->updated_time + 20 < now){
+		while(rt_walker_prev->updated_time + expiretime < now){
 			sr->routing_table = rt_walker_prev->next;
 			free(rt_walker_prev);
 			rt_walker_prev = sr->routing_table;
@@ -279,7 +281,7 @@ void *sr_rip_timeout(void *sr_ptr) {
 		}
 		rt_walker = rt_walker_prev -> next;
 		while(rt_walker){
-			if (rt_walker->updated_time + 20 < now){
+			if (rt_walker->updated_time + expiretime < now){
 				rt_walker_prev -> next = rt_walker->next;
 				free(rt_walker);
 			}
@@ -571,6 +573,11 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         }
     }
 
+    for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
+        	time_t now;
+        	time(&now);
+        	rt_iter->updated_time = now;
+        }
     if(update==1)
     	send_rip_update(sr);
     pthread_mutex_unlock(&(sr->rt_lock));
