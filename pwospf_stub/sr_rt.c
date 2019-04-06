@@ -451,87 +451,117 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     pthread_mutex_lock(&(sr->rt_lock));
     uint32_t src_addr = ip_packet->ip_src;
 
+    uint32_t rt_dst;
+    uint32_t rt_gw;
+    uint32_t rt_metric;
+    uint32_t rt_interface;
+    struct in_addr rt_mask;
+
     struct sr_rt* rt_iter2;
-    boolean hasRouteToSrc = false;
+    int hasRouteToSrc = 0;
     for(rt_iter2 = sr->routing_table; rt_iter2!=NULL; rt_iter2 = rt_iter2->next){
-    	if(rt_dst != src_addr)
+    	if(rt_iter2->dest.s_addr != src_addr)
     		continue;
-    	hasRouteToSrc = true;
-        uint32_t rt_dst = rt_iter2->dest->s_addr;
-        uint32_t rt_gw = rt_iter2->gw->s_addr;
-        uint32_t rt_metric = rt_iter2->metric;
-        uint32_t rt_interface = rt_iter2->interface;
+    	hasRouteToSrc = 1;
+        rt_dst = rt_iter2->dest.s_addr;
+        rt_gw = rt_iter2->gw.s_addr;
+        rt_metric = rt_iter2->metric;
+        rt_interface = rt_iter2->interface;
+        rt_mask = rt_iter2->mask;
     }
 
-    if(!hasRouteToSrc){   // no route to rip src, end function
+    if(hasRouteToSrc == 0){   /* no route to rip src, end function*/
+    	int i;
+    	for(i = 0; i < MAX_NUM_ENTRIES; i++){
+    		uint16_t tag = rip_packet->entries[i].tag;
+    		if(tag==NULL)
+    		    continue;
+    	    uint32_t new_dst = rip_packet->entries[i].address;
+    	    uint32_t new_metric = rip_packet->entries[i].metric;
+    	    if(new_dst != 0xe0000009)
+    	    	continue;
+
+    	    struct in_addr add_dst;
+    	    add_dst.s_addr = src_addr;
+    	    struct in_addr add_gw;
+    	    add_gw.s_addr = src_addr;
+    	    /* the interface of the new entry should use iface?*/
+    	    /* which mask to use?*/
+    	    uint32_t add_metric = 1;
+
+    	    sr_add_rt_entry(sr, add_dst, add_gw, rt_mask, add_metric, iface);
+    	}
+
     	pthread_mutex_unlock(&(sr->rt_lock));
-    	return; // need return or not?
+    	return;
     }
 
 
-    boolean update = false;
+    int update = 0;
+    int i;
+    for(i = 0; i < MAX_NUM_ENTRIES; i++){
 
-    for(int i = 0; i < MAX_NUM_ENTRIES; i++){
-
-        //use tag to see if the entries come to an end(empty entry)
-        tag = rip_packet->entries[i]->tag;
+        /*use tag to see if the entries come to an end(empty entry)*/
+        uint16_t tag = rip_packet->entries[i].tag;
         if(tag==NULL)
         	continue;
 
-        uint32_t new_dst = rip_packet->entries[i]->address;    //the dst
-        uint32_t new_metric = rip_packet->entries[i]->metric;
+        uint32_t new_dst = rip_packet->entries[i].address;    /*the dst*/
+        uint32_t new_metric = rip_packet->entries[i].metric;
 
-        boolean hasRoute = false; //bool to check if current routing table has route to dest in rip entry
+        int hasRoute = 0; /*bool to check if current routing table has route to dest in rip entry*/
 
         struct sr_rt* rt_iter;
 
         for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
-        	uint32_t current_dst = rt_iter->dest->s_addr;
-        	uint32_t current_gw = rt_iter->gw->s_addr;
+        	uint32_t current_dst = rt_iter->dest.s_addr;
+        	uint32_t current_gw = rt_iter->gw.s_addr;
+        	uint32_t current_metric = rt_iter->metric;
 
         	if(new_dst == current_dst){
 
-				hasRoute = true; // no need to add new entry
+				hasRoute = 1; /* no need to add new entry*/
 
         		uint32_t updated_metric = new_metric + rt_metric;
-        		if(updated_metric < current_metric && updated_metric < 16){ //when equal, update??
-        			update = true;
+        		if(updated_metric < current_metric && updated_metric < 16){ /*when equal, update??*/
+        			update = 1;
         			struct in_addr updated_gw;
-        			updated_gw->s_addr = rt_gw;
+        			updated_gw.s_addr = rt_gw;
 
         			rt_iter->gw = updated_gw;
         			rt_iter->metric = updated_metric;
 
         			time_t now;
         			time(&now);
-        			rt_iter->updated_time = now;// need to get current time
+        			rt_iter->updated_time = now;/* need to get current time*/
 
-        			rt_iter->interface = rt_interface;
+        			memcpy(rt_iter->interface, iface, 32);
+        			/*rt_iter->interface = iface;*/
         		}
         	}
         }
 
-        if(!hasRoute){
-        	update = true;
+        if(hasRoute == 0){
+        	update = 1;
 
         	struct in_addr add_dst;
-        	add_dst->s_addr = new_dst;
-        	if(new_dst == 0xe0000009){//if is an rip request message
-        		add_dst->s_addr = src_addr;
+        	add_dst.s_addr = new_dst;
+        	if(new_dst == 0xe0000009){/*if is an rip request message*/
+        		add_dst.s_addr = src_addr;
         	}
         	struct in_addr add_gw;
-        	add_gw->s_addr = rt_gw;
-        	// the interface of the new entry should use iface?
-        	// which mask to use?
+        	add_gw.s_addr = rt_gw;
+        	/* the interface of the new entry should use iface?*/
+        	/* which mask to use?*/
         	uint32_t add_metric = rt_metric + new_metric;
-        	if(add_metirc > 16)
+        	if(add_metric > 16)
         		add_metric = 16;
 
-        	sr_add_rt_entry(sr, add_dst, add_gw, rt_mask, add_metirc, iface);
+        	sr_add_rt_entry(sr, add_dst, add_gw, rt_mask, add_metric, iface);
         }
     }
 
-    if(update)
+    if(update==1)
     	send_rip_update(sr);
     pthread_mutex_unlock(&(sr->rt_lock));
 }
