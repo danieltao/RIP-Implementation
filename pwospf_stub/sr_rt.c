@@ -243,7 +243,7 @@ uint16_t udp_checksum(const void *buff, size_t len, in_addr_t src_addr, in_addr_
          sum += htons(length);
          while (sum >> 16)
                  sum = (sum & 0xFFFF) + (sum >> 16);
-         return ( (uint16_t)(~sum)  );
+         return ((uint16_t)(~sum));
 }
 
 
@@ -474,6 +474,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
     uint32_t src_addr = ip_packet->ip_src;
 
+	sr_print_routing_table(sr);
     int update = 0;
 
     if(cmd == 1){
@@ -553,7 +554,6 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	rt_iter->updated_time = now;
     }
     if(update==1){
-    	sr_print_routing_table(sr);
     	send_rip_update(sr);
     }
     pthread_mutex_unlock(&(sr->rt_lock));

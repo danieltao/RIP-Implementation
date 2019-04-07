@@ -393,10 +393,12 @@ void sr_handlepacket(struct sr_instance* sr,
 
 		if(ip_hdr->ip_p == 17){ /*is udp package*/
 			sr_udp_hdr_t *udp_hdr = (sr_udp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-			sr_rip_pkt_t *rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t));
-
-			update_route_table(sr, ip_hdr, rip_hdr, iface);
-			return;
+			if(udp_hdr-> port_src == 520 && udp_hdr -> port_dst==520){
+				sr_rip_pkt_t *rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t));
+				printf("about to update\n");
+				update_route_table(sr, ip_hdr, rip_hdr, iface);
+				return;
+			}
 		}
 
 		for (interface = sr->if_list; interface != NULL; interface = interface->next){
