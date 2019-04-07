@@ -301,6 +301,7 @@ void send_icmp_error(struct sr_instance* sr,
 int forward(struct sr_instance *sr,
 		uint8_t* pac,
 		uint32_t len) {
+	printf("Forwarding...");
 	uint8_t *packet = malloc(len);
 	memcpy(packet, pac, len);
 	sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *) packet;
@@ -369,6 +370,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
 	char* iface = interface;
 	printf("handling packet received from interface %s \n", iface);
+	fflush(stdout);
 
 	sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)packet;
 
@@ -403,6 +405,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
 		for (interface = sr->if_list; interface != NULL; interface = interface->next){
 			if (interface->ip == ip_hdr->ip_dst) { /*sent to me*/
+				printf("Send to me\n");
 				if (ip_hdr->ip_p == ip_protocol_icmp) {/* is icmp message */
 					/*first check*/
 					if(len<sizeof(sr_icmp_hdr_t)){

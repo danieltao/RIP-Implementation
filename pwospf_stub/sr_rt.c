@@ -187,7 +187,7 @@ void sr_print_routing_table(struct sr_instance* sr)
             sr_print_routing_entry(rt_walker);
         rt_walker = rt_walker->next;
     }
-    printf("finish printing\n");
+    printf("--------------------------------------finish printing------------------------------\n");
     pthread_mutex_unlock(&(sr->rt_lock));
 
 
@@ -292,6 +292,8 @@ void *sr_rip_timeout(void *sr_ptr) {
 			}
 			rt_walker = rt_walker_prev -> next;
 		}
+		printf("---------------------Finish rip timeout------------------------\n");
+
 		send_rip_update(sr);
         pthread_mutex_unlock(&(sr->rt_lock));
     }
@@ -368,6 +370,8 @@ void send_rip_request(struct sr_instance *sr){
 		free(packet);
 		interface = interface -> next;
 	}
+	printf("---------------------Finish rip request------------------------\n");
+
 }
 
 
@@ -402,8 +406,8 @@ void send_rip_update(struct sr_instance *sr){
 			packet -> entries[i].metric = rt -> metric;
 			packet -> entries[i].tag = 2;
 			packet -> entries[i].next_hop = rt -> gw.s_addr;
-			printf("from interface %s     address:%x  mask:%x  metric:%d  next_hop:%x\n", bi -> name, rt -> dest.s_addr, rt -> mask.s_addr, rt -> metric, rt -> gw.s_addr);
-			i ++;
+		/*	printf("from interface %s     address:%x  mask:%x  metric:%d  next_hop:%x\n", bi -> name, rt -> dest.s_addr, rt -> mask.s_addr, rt -> metric, rt -> gw.s_addr);
+		*/	i ++;
 			rt = rt->next;
 		}
 		for(i; i<25;i++){
@@ -462,6 +466,8 @@ void send_rip_update(struct sr_instance *sr){
 		free(packet);
 		bi = bi -> next;
     }
+	printf("---------------------Finish rip update------------------------\n");
+
 	pthread_mutex_unlock(&(sr->rt_lock));
 }
 
@@ -505,8 +511,8 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	if(new_dst == current_dst){
 
 				hasRoute = 1; /* no need to add new entry*/
-				printf("Destination already in rt\n");
-
+	/*			printf("Destination already in rt\n");
+*/
         		uint32_t updated_metric = new_metric + 1;
         		if(updated_metric < current_metric && updated_metric < 16){ /*when equal, update??*/
         			update = 1;
@@ -528,8 +534,8 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         if(hasRoute == 0){
         	update = 1;
-        	printf("Destination not in rt yet\n");
-        	struct in_addr add_dst;
+    /*    	printf("Destination not in rt yet\n");
+      */  	struct in_addr add_dst;
         	add_dst.s_addr = new_dst;
         	struct in_addr add_gw;
         	add_gw.s_addr = src_addr;
@@ -544,8 +550,8 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	sr_add_rt_entry(sr, add_dst, add_gw, add_mask, add_metric, iface);
         }
 
-        printf("attributes received from %s: dest: %x, metric: %d, mask: %x\n", iface, new_dst, new_metric, new_mask);
-    }
+   /*     printf("attributes received from %s: dest: %x, metric: %d, mask: %x\n", iface, new_dst, new_metric, new_mask);
+    */}
 
     struct sr_rt* rt_iter;
     for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
@@ -553,8 +559,11 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	time(&now);
         	rt_iter->updated_time = now;
     }
+	printf("---------------------Finish rip routing table------------------------\n");
+
     if(update==1){
     	send_rip_update(sr);
     }
+
     pthread_mutex_unlock(&(sr->rt_lock));
 }
