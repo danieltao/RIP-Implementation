@@ -251,7 +251,7 @@ void *sr_rip_timeout(void *sr_ptr) {
     struct sr_instance *sr = sr_ptr;
     while (1) {
         sleep(5);
-        printf("Called rip timeout\n");
+        printf("-------------------Called rip timeout-----------------------\n");
         pthread_mutex_lock(&(sr->rt_lock));
         /*send the RIP response packets periodically. check the routing table and remove expired route entry. If a route entry is not updated in 20 seconds, we will think it is expired. */
         /* todo: garbage collection*/
@@ -294,7 +294,6 @@ void *sr_rip_timeout(void *sr_ptr) {
 			rt_walker = rt_walker_prev -> next;
 		}
 		send_rip_update(sr);
-        printf("Finish update\n");
         pthread_mutex_unlock(&(sr->rt_lock));
     }
     return NULL;
@@ -305,7 +304,7 @@ void send_rip_request(struct sr_instance *sr){
      * This function is called when the program started.
 */
 
-    printf("Called rip request\n");
+    printf("---------------------Called rip request------------------------\n");
 	struct sr_if * interface;
 	interface = sr -> if_list;
 
@@ -378,7 +377,7 @@ void send_rip_update(struct sr_instance *sr){
     pthread_mutex_lock(&(sr->rt_lock));
     /*You should call it when you receive a RIP request packet or in the sr_rip_timeout function. You should enable split horizon here to prevent count-to-infinity problem. */
 
-    printf("Called rip update\n");
+    printf("----------------------Called rip update--------------------------------\n");
     /* broadcast */
     struct sr_if * bi;
     bi = sr -> if_list;
@@ -395,7 +394,6 @@ void send_rip_update(struct sr_instance *sr){
 			/* split horizon ----- double check*/
 			if(strcmp(rt -> interface, bi -> name)==0){
 				/* if next hop and destination is in the same subnet, and I am sending the package to the next hop router*/
-				printf("same! %s %s\n", rt->interface, bi->name);
 				rt = rt->next;
 				continue;
 			}
@@ -409,7 +407,6 @@ void send_rip_update(struct sr_instance *sr){
 			i ++;
 			rt = rt->next;
 		}
-		printf("I have sent %d entry\n", i);
 		/* config udp header */
 		sr_udp_hdr_t *udp = (sr_udp_hdr_t *) malloc(sizeof(sr_udp_hdr_t));
 		udp -> port_src = 520;
@@ -463,9 +460,7 @@ void send_rip_update(struct sr_instance *sr){
 
 void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_pkt_t* rip_packet, char* iface){
 	pthread_mutex_lock(&(sr->rt_lock));
-    printf("Called update route table\n");
-
-    printf("sr_adr: %x\n", sr->sr_addr);
+    printf("-----------Called update route table---------------------------------\n");
 
     uint8_t cmd = rip_packet->command;
 
@@ -485,7 +480,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     	uint32_t new_metric = rip_packet->entries[i].metric;
     	uint32_t new_mask = rip_packet->entries[i].mask;
         /*use tag to see if the entries come to an end(empty entry)*/
-        if(rip_packet -> entries[i].tag==0)
+        if(rip_packet -> entries[i].tag==0 | new_dst==0 | new_mask == 0)
         	continue;
 
 
@@ -539,7 +534,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	sr_add_rt_entry(sr, add_dst, add_gw, add_mask, add_metric, iface);
         }
 
-        printf("attributes: %x, %d, %x\n", new_dst, new_metric, new_mask);
+        printf("attributes: dest: %x, metric: %d, mask: %x\n", new_dst, new_metric, new_mask);
     }
 
     struct sr_rt* rt_iter;
