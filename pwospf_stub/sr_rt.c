@@ -402,8 +402,8 @@ void send_rip_update(struct sr_instance *sr){
 			packet -> entries[i].address = rt -> dest.s_addr;
 			packet -> entries[i].mask = rt -> mask.s_addr;
 			packet -> entries[i].metric = rt -> metric;
-			packet -> entries[i].tag = 0;
-			packet -> entries[i].next_hop = 0;
+			packet -> entries[i].tag = 2;
+			packet -> entries[i].next_hop = rt -> gw.s_addr;
 			i ++;
 			rt = rt->next;
 		}
@@ -460,76 +460,33 @@ void send_rip_update(struct sr_instance *sr){
 
 void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_pkt_t* rip_packet, char* iface){
 	pthread_mutex_lock(&(sr->rt_lock));
-    printf("Called update route table");
+    printf("Called update route table\n");
+
+    printf("sr_adr: %x\n", sr->sr_addr);
 
     uint8_t cmd = rip_packet->command;
 
     uint32_t src_addr = ip_packet->ip_src;
 
-    uint32_t rt_dst;
-    uint32_t rt_gw;
-    uint32_t rt_metric;
-    uint32_t rt_interface;
-    struct in_addr rt_mask;
-
-    struct sr_rt* rt_iter2;
-    int hasRouteToSrc = 0;
-    for(rt_iter2 = sr->routing_table; rt_iter2!=NULL; rt_iter2 = rt_iter2->next){
-    	printf("firstloop\n");
-    	if(rt_iter2->dest.s_addr != src_addr)
-    		continue;
-    	hasRouteToSrc = 1;
-        rt_dst = rt_iter2->dest.s_addr;
-        rt_gw = rt_iter2->gw.s_addr;
-        rt_metric = rt_iter2->metric;
-        rt_interface = rt_iter2->interface;
-        rt_mask = rt_iter2->mask;
-    }
-
     int update = 0;
 
-    if(cmd == 1)
-    	update = 1;
-
-    if(hasRouteToSrc == 0){   /* no route to rip src, end function*/
-    	printf("hasRouteToSrc == 0\n");
-    	int i;
-    	for(i = 0; i < MAX_NUM_ENTRIES; i++){
-    		uint16_t tag = rip_packet->entries[i].tag;
-    		printf("tag: %d\n", tag);
-    		if(tag==NULL)
-    		    continue;
-    	    uint32_t new_dst = rip_packet->entries[i].address;
-    	    uint32_t new_metric = rip_packet->entries[i].metric;
-    	    if(new_dst != 0xe0000009)
-    	    	continue;
-
-    	    printf("add initial entry");
-    	    struct in_addr add_dst;
-    	    add_dst.s_addr = src_addr;
-    	    struct in_addr add_gw;
-    	    add_gw.s_addr = src_addr;
-    	    /* the interface of the new entry should use iface?*/
-    	    /* which mask to use?*/
-    	    uint32_t add_metric = 1;
-
-    	    sr_add_rt_entry(sr, add_dst, add_gw, rt_mask, add_metric, iface);
-    	}
-
+    if(cmd == 1){
+    	send_rip_update(sr);
     	pthread_mutex_unlock(&(sr->rt_lock));
     	return;
     }
 
     int i;
     for(i = 0; i < MAX_NUM_ENTRIES; i++){
+    	uint32_t new_dst = rip_packet->entries[i].address;    /*the dst*/
+    	uint32_t new_metric = rip_packet->entries[i].metric;
+    	uint32_t new_mask = rip_packet->entries[i].mask;
 
         /*use tag to see if the entries come to an end(empty entry)*/
-        uint16_t tag = rip_packet->entries[i].tag;
-        if(tag==NULL)
+        if(new_dst==0)
         	continue;
 
-        uint32_t new_dst = rip_packet->entries[i].address;    /*the dst*/
-        uint32_t new_metric = rip_packet->entries[i].metric;
+        printf("attributes: %d, %d, %d\n", new_dst, new_metric, new_mask);
 
         int hasRoute = 0; /*bool to check if current routing table has route to dest in rip entry*/
 
@@ -544,11 +501,11 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
 				hasRoute = 1; /* no need to add new entry*/
 
-        		uint32_t updated_metric = new_metric + rt_metric;
+        		uint32_t updated_metric = new_metric + 1;
         		if(updated_metric < current_metric && updated_metric < 16){ /*when equal, update??*/
         			update = 1;
         			struct in_addr updated_gw;
-        			updated_gw.s_addr = rt_gw;
+        			updated_gw.s_addr = src_addr;
 
         			rt_iter->gw = updated_gw;
         			rt_iter->metric = updated_metric;
@@ -568,18 +525,17 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         	struct in_addr add_dst;
         	add_dst.s_addr = new_dst;
-        	if(new_dst == 0xe0000009){/*if is an rip request message*/
-        		add_dst.s_addr = src_addr;
-        	}
         	struct in_addr add_gw;
-        	add_gw.s_addr = rt_gw;
+        	add_gw.s_addr = src_addr;
+        	struct in_addr add_mask;
+        	add_mask.s_addr = new_mask;
         	/* the interface of the new entry should use iface?*/
         	/* which mask to use?*/
-        	uint32_t add_metric = rt_metric + new_metric;
+        	uint32_t add_metric = 1 + new_metric;
         	if(add_metric > 16)
         		add_metric = 16;
 
-        	sr_add_rt_entry(sr, add_dst, add_gw, rt_mask, add_metric, iface);
+        	sr_add_rt_entry(sr, add_dst, add_gw, add_mask, add_metric, iface);
         }
     }
 
