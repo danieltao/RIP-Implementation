@@ -257,7 +257,6 @@ void *sr_rip_timeout(void *sr_ptr) {
         /* todo: garbage collection*/
         time_t now;
         time(&now);
-        sr_print_routing_table(sr);
         struct sr_rt* rt_walker = 0;
         struct sr_rt* rt_walker_prev = 0;
 		if(sr->routing_table == 0){
@@ -403,7 +402,7 @@ void send_rip_update(struct sr_instance *sr){
 			packet -> entries[i].metric = rt -> metric;
 			packet -> entries[i].tag = 2;
 			packet -> entries[i].next_hop = rt -> gw.s_addr;
-			printf("%d     address:%x  mask:%x  metric:%d  next_hop:%x\n", i, rt -> dest.s_addr, rt -> mask.s_addr, rt -> metric, rt -> gw.s_addr);
+			printf("from interface %s     address:%x  mask:%x  metric:%d  next_hop:%x\n", bi -> name, rt -> dest.s_addr, rt -> mask.s_addr, rt -> metric, rt -> gw.s_addr);
 			i ++;
 			rt = rt->next;
 		}
@@ -454,6 +453,7 @@ void send_rip_update(struct sr_instance *sr){
 		memcpy(msg + sizeof(sr_udp_hdr_t), packet, sizeof(sr_rip_pkt_t));
 
 		sr_send_packet(sr, msg- sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t), sizeof(sr_udp_hdr_t) + sizeof(sr_rip_pkt_t)+ sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), bi -> name);
+		printf("message sent from %s\n", bi->name);
 		/* garbage collection*/
 		free(msg- sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t));
 		free(ether_packet);
@@ -545,14 +545,16 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         printf("attributes: dest: %x, metric: %d, mask: %x\n", new_dst, new_metric, new_mask);
     }
-/*
+
     struct sr_rt* rt_iter;
     for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
         	time_t now;
         	time(&now);
         	rt_iter->updated_time = now;
-        }*/
-    if(update==1)
+    }
+    if(update==1){
+    	sr_print_routing_table(sr);
     	send_rip_update(sr);
+    }
     pthread_mutex_unlock(&(sr->rt_lock));
 }
