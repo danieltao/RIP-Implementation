@@ -393,8 +393,9 @@ void send_rip_update(struct sr_instance *sr){
 		packet -> version = 2;
 		while(rt){
 			/* split horizon ----- double check*/
-			if(strcmp(rt -> interface, bi -> name)){
+			if(strcmp(rt -> interface, bi -> name)==0){
 				/* if next hop and destination is in the same subnet, and I am sending the package to the next hop router*/
+				printf("same! %s %s\n", rt->interface, bi->name);
 				rt = rt->next;
 				continue;
 			}
@@ -404,9 +405,11 @@ void send_rip_update(struct sr_instance *sr){
 			packet -> entries[i].metric = rt -> metric;
 			packet -> entries[i].tag = 2;
 			packet -> entries[i].next_hop = rt -> gw.s_addr;
+			printf("%d     address:%x  mask:%x  metric:%d  next_hop:%x\n", i, rt -> dest.s_addr, rt -> mask.s_addr, rt -> metric, rt -> gw.s_addr);
 			i ++;
 			rt = rt->next;
 		}
+		printf("I have sent %d entry\n", i);
 		/* config udp header */
 		sr_udp_hdr_t *udp = (sr_udp_hdr_t *) malloc(sizeof(sr_udp_hdr_t));
 		udp -> port_src = 520;
@@ -481,12 +484,10 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     	uint32_t new_dst = rip_packet->entries[i].address;    /*the dst*/
     	uint32_t new_metric = rip_packet->entries[i].metric;
     	uint32_t new_mask = rip_packet->entries[i].mask;
-
         /*use tag to see if the entries come to an end(empty entry)*/
         if(new_dst==0)
         	continue;
 
-        printf("attributes: %d, %d, %d\n", new_dst, new_metric, new_mask);
 
         int hasRoute = 0; /*bool to check if current routing table has route to dest in rip entry*/
 
@@ -537,6 +538,8 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         	sr_add_rt_entry(sr, add_dst, add_gw, add_mask, add_metric, iface);
         }
+
+        printf("attributes: %x, %d, %x\n", new_dst, new_metric, new_mask);
     }
 
     struct sr_rt* rt_iter;
