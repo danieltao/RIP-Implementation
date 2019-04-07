@@ -485,7 +485,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     	uint32_t new_metric = rip_packet->entries[i].metric;
     	uint32_t new_mask = rip_packet->entries[i].mask;
         /*use tag to see if the entries come to an end(empty entry)*/
-        if(new_dst==0)
+        if(rip_packet -> entries[i].tag==0)
         	continue;
 
 
