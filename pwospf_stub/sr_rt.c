@@ -459,8 +459,11 @@ void send_rip_update(struct sr_instance *sr){
 
 
 void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_pkt_t* rip_packet, char* iface){
-    pthread_mutex_lock(&(sr->rt_lock));
+	pthread_mutex_lock(&(sr->rt_lock));
     printf("Called update route table");
+
+    uint8_t cmd = rip_packet->command;
+
     uint32_t src_addr = ip_packet->ip_src;
 
     uint32_t rt_dst;
@@ -472,6 +475,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     struct sr_rt* rt_iter2;
     int hasRouteToSrc = 0;
     for(rt_iter2 = sr->routing_table; rt_iter2!=NULL; rt_iter2 = rt_iter2->next){
+    	printf("firstloop\n");
     	if(rt_iter2->dest.s_addr != src_addr)
     		continue;
     	hasRouteToSrc = 1;
@@ -482,10 +486,17 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         rt_mask = rt_iter2->mask;
     }
 
+    int update = 0;
+
+    if(cmd == 1)
+    	update = 1;
+
     if(hasRouteToSrc == 0){   /* no route to rip src, end function*/
+    	printf("hasRouteToSrc == 0\n");
     	int i;
     	for(i = 0; i < MAX_NUM_ENTRIES; i++){
     		uint16_t tag = rip_packet->entries[i].tag;
+    		printf("tag: %d\n", tag);
     		if(tag==NULL)
     		    continue;
     	    uint32_t new_dst = rip_packet->entries[i].address;
@@ -493,6 +504,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     	    if(new_dst != 0xe0000009)
     	    	continue;
 
+    	    printf("add initial entry");
     	    struct in_addr add_dst;
     	    add_dst.s_addr = src_addr;
     	    struct in_addr add_gw;
@@ -508,8 +520,6 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     	return;
     }
 
-
-    int update = 0;
     int i;
     for(i = 0; i < MAX_NUM_ENTRIES; i++){
 
@@ -573,6 +583,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         }
     }
 
+    struct sr_rt* rt_iter;
     for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
         	time_t now;
         	time(&now);
