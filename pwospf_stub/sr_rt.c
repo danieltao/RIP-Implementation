@@ -265,7 +265,7 @@ void *sr_rip_timeout(void *sr_ptr) {
 			continue;
 		}
 
-		int expiretime = 2000;
+		int expiretime = 20;
 
 		rt_walker_prev = sr->routing_table;
 		while(rt_walker_prev->updated_time + expiretime < now){
@@ -407,6 +407,14 @@ void send_rip_update(struct sr_instance *sr){
 			i ++;
 			rt = rt->next;
 		}
+		for(i; i<25;i++){
+			packet -> entries[i].afi = 2;
+			packet -> entries[i].address = 0;
+			packet -> entries[i].mask = 0;
+			packet -> entries[i].metric = 100;
+			packet -> entries[i].tag = 0;
+			packet -> entries[i].next_hop = 0;
+		}
 		/* config udp header */
 		sr_udp_hdr_t *udp = (sr_udp_hdr_t *) malloc(sizeof(sr_udp_hdr_t));
 		udp -> port_src = 520;
@@ -480,7 +488,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
     	uint32_t new_metric = rip_packet->entries[i].metric;
     	uint32_t new_mask = rip_packet->entries[i].mask;
         /*use tag to see if the entries come to an end(empty entry)*/
-        if(rip_packet -> entries[i].tag==0 | new_dst==0 | new_mask == 0)
+        if(rip_packet -> entries[i].tag==0 | new_dst==0 | new_mask == 0 | new_metric >= 16)
         	continue;
 
 
@@ -496,6 +504,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	if(new_dst == current_dst){
 
 				hasRoute = 1; /* no need to add new entry*/
+				printf("Destination already in rt\n");
 
         		uint32_t updated_metric = new_metric + 1;
         		if(updated_metric < current_metric && updated_metric < 16){ /*when equal, update??*/
@@ -518,7 +527,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         if(hasRoute == 0){
         	update = 1;
-
+        	printf("Destination not in rt yet\n");
         	struct in_addr add_dst;
         	add_dst.s_addr = new_dst;
         	struct in_addr add_gw;
@@ -536,13 +545,13 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         printf("attributes: dest: %x, metric: %d, mask: %x\n", new_dst, new_metric, new_mask);
     }
-
+/*
     struct sr_rt* rt_iter;
     for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
         	time_t now;
         	time(&now);
         	rt_iter->updated_time = now;
-        }
+        }*/
     if(update==1)
     	send_rip_update(sr);
     pthread_mutex_unlock(&(sr->rt_lock));
