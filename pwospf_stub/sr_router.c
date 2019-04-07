@@ -368,6 +368,7 @@ void sr_handlepacket(struct sr_instance* sr,
 	assert(interface);
 
 	char* iface = interface;
+	printf("handling packet received from interface %s \n", iface);
 
 	sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)packet;
 
@@ -393,6 +394,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		if(ip_hdr->ip_p == 17){ /*is udp package*/
 			sr_udp_hdr_t *udp_hdr = (sr_udp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 			sr_rip_pkt_t *rip_hdr = (sr_rip_pkt_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t));
+
 			update_route_table(sr, ip_hdr, rip_hdr, iface);
 			return;
 		}

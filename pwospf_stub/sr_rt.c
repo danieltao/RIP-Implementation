@@ -543,7 +543,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	sr_add_rt_entry(sr, add_dst, add_gw, add_mask, add_metric, iface);
         }
 
-        printf("attributes: dest: %x, metric: %d, mask: %x\n", new_dst, new_metric, new_mask);
+        printf("attributes received from %s: dest: %x, metric: %d, mask: %x\n", iface, new_dst, new_metric, new_mask);
     }
 
     struct sr_rt* rt_iter;
