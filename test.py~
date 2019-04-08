@@ -113,7 +113,6 @@ if __name__ == '__main__':
                 result = False
                 break
         if result and not test_traceroute('192.168.2.200', 4):
-	    print "traceroute false 192.168.2.200"
             result = False
         print '%s: ' % sys.argv[1],
         if result:

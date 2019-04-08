@@ -1,6 +1,6 @@
 client python test.py Testcase1
 server1 python ../test.py Testcase2
-dserver2 python ../test.py Testcase3
+server2 python ../test.py Testcase3
 vhost1 ifconfig vhost1-eth2 down
 sh echo 'Info: vhost1-eth2 down'
 sh echo 'Info: Sleep 60 seconds, wait for routing table converging'
