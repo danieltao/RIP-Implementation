@@ -340,12 +340,19 @@ int forward(struct sr_instance *sr,
 	struct sr_arpreq *temp;
 	interface = sr_get_interface(sr, rt->interface);
 	struct sr_arpentry* entry;
-	entry = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+	/* check ip_dst or gw*/
+	uint32_t target_dst;
+	if(rt->metric > 0){
+		target_dst = rt->gw.s_addr;
+	}else{
+		target_dst = ip_hdr-> ip_dst;
+	}
+	entry = sr_arpcache_lookup(&sr->cache, target_dst);
 	if (entry) {
 		memcpy(ether_hdr->ether_shost, interface->addr, ETHER_ADDR_LEN);
 		memcpy(ether_hdr->ether_dhost, entry->mac, ETHER_ADDR_LEN);
 	} else {
-		temp = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, packet, len, rt->interface);
+		temp = sr_arpcache_queuereq(&sr->cache, target_dst, packet, len, rt->interface);
 		time_t curr;
 		time(&curr);
 		printf("Put ARP request on queue\n");
@@ -359,7 +366,6 @@ int forward(struct sr_instance *sr,
 				printf("temp ip is %x\n", temp->ip);
 				int res = send_arp_request(sr, temp->ip);
 				if (res != 0) {
-					printf("Request unsuccessfully failed \n");
 					struct sr_packet* packet;
 					for (packet = temp->packets; packet != NULL; packet = packet->next) {
 						sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)(packet->buf);
@@ -473,7 +479,6 @@ void sr_handlepacket(struct sr_instance* sr,
 		for (interface = sr->if_list; interface != NULL; interface = interface->next){
 			if (interface->ip == arp_hdr->ar_tip) {/* if it is sent to me*/
  				if (arp_hdr->ar_op == htons(arp_op_request)) {/* if it is a request*/
-
 					send_arp_reply(sr, arp_hdr->ar_tip, arp_hdr->ar_sip, interface->addr, arp_hdr->ar_sha);
 				} else {
 					/* if it is a reply*/
