@@ -263,12 +263,14 @@ void *sr_rip_timeout(void *sr_ptr) {
 			pthread_mutex_unlock(&(sr->rt_lock));
 			continue;
 		}
-
 		int expiretime = 20;
-
 		rt_walker_prev = sr->routing_table;
-		while(rt_walker_prev->updated_time + expiretime < now){
+
+		while(rt_walker_prev->updated_time + expiretime < now && rt_walker_prev->metric!=0){
 			sr->routing_table = rt_walker_prev->next;
+			printf("remove interface (previous) %s with metrics %d", rt_walker_prev->interface, rt_walker_prev -> metric);
+			fflush(stdout);
+
 			free(rt_walker_prev);
 			rt_walker_prev = sr->routing_table;
 			if(!rt_walker_prev){
@@ -278,20 +280,43 @@ void *sr_rip_timeout(void *sr_ptr) {
 				continue;
 			}
 		}
+
+		struct sr_if* if_iter = sr->if_list;
+		/* open rt_iter */
+		while (if_iter){
+			struct sr_rt* rt_iter = sr->routing_table;
+			while(rt_iter){
+				if((if_iter->ip & rt_iter->mask.s_addr) == (rt_iter->dest.s_addr & rt_iter->mask.s_addr) && sr_obtain_interface_status(sr, if_iter->name)!=0){
+					rt_iter->gw.s_addr = 0;
+					rt_iter->metric = 0;
+					rt_iter->updated_time = now;
+				}
+				rt_iter = rt_iter->next;
+			}
+			if_iter = if_iter->next;
+		}
+
 		rt_walker = rt_walker_prev -> next;
 		while(rt_walker){
-			if (rt_walker->updated_time + expiretime < now){
+			printf("%d for %s\n\n\n", sr_obtain_interface_status(sr, rt_walker->interface), rt_walker->interface);
+			if (rt_walker->updated_time + expiretime < now && rt_walker->metric != 0){
+				printf("remove interface %s with metrics %d", rt_walker->interface, rt_walker -> metric);
+				fflush(stdout);
 				rt_walker_prev -> next = rt_walker->next;
 				free(rt_walker);
-			}
+			}else if(sr_obtain_interface_status(sr, rt_walker->interface) == 0 && rt_walker -> metric == 0){
+            	rt_walker->metric = 17;
+            }
 			rt_walker_prev = rt_walker_prev->next;
 			if(!rt_walker_prev){
 				send_rip_update(sr);
+				printf("---------------------Finish rip timeout------------------------\n");
 				pthread_mutex_unlock(&(sr->rt_lock));
-				continue;
+				return NULL;
 			}
 			rt_walker = rt_walker_prev -> next;
 		}
+		sr_print_routing_table(sr);
 		printf("---------------------Finish rip timeout------------------------\n");
 
 		send_rip_update(sr);
@@ -514,7 +539,7 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 	/*			printf("Destination already in rt\n");
 */
         		uint32_t updated_metric = new_metric + 1;
-        		if(updated_metric < current_metric && updated_metric < 16){ /*when equal, update??*/
+        		if(updated_metric < current_metric && updated_metric < 16 && current_metric != 17){ /*when equal, update??*/
         			update = 1;
         			struct in_addr updated_gw;
         			updated_gw.s_addr = src_addr;
@@ -528,6 +553,10 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
 
         			memcpy(rt_iter->interface, iface, 32);
         			/*rt_iter->interface = iface;*/
+        		}else if (updated_metric == current_metric | current_metric == 17){
+        			time_t now;
+					time(&now);
+					rt_iter->updated_time = now;/* need to get current time*/
         		}
         	}
         }
@@ -544,8 +573,6 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
         	/* the interface of the new entry should use iface?*/
         	/* which mask to use?*/
         	uint32_t add_metric = 1 + new_metric;
-        	if(add_metric > 16)
-        		add_metric = 16;
 
         	sr_add_rt_entry(sr, add_dst, add_gw, add_mask, add_metric, iface);
         }
@@ -553,12 +580,6 @@ void update_route_table(struct sr_instance *sr, sr_ip_hdr_t* ip_packet ,sr_rip_p
    /*     printf("attributes received from %s: dest: %x, metric: %d, mask: %x\n", iface, new_dst, new_metric, new_mask);
     */}
 
-    struct sr_rt* rt_iter;
-    for(rt_iter = sr->routing_table; rt_iter!=NULL; rt_iter = rt_iter->next){
-        	time_t now;
-        	time(&now);
-        	rt_iter->updated_time = now;
-    }
 	printf("---------------------Finish rip routing table------------------------\n");
 
     if(update==1){

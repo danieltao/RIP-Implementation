@@ -328,25 +328,32 @@ int forward(struct sr_instance *sr,
 	/* check a bunch of things*/
 	struct sr_rt *rt = longest_prefix(sr, ip_hdr->ip_dst);
 	if (rt == NULL){
-		printf("Destination Unreachable\n");
+		printf("Destination Net Unreachable\n");
 		return DEST_NET_UNREACHABLE;}
+	printf("requiring rt->metric\n");
+	if (rt->metric > 15){
+		printf("Destination Net Unreachable\n");
+		return DEST_NET_UNREACHABLE;
+	}
+	printf("successfully required rt metric");
 	if (ip_hdr->ip_ttl == 1){
 		printf("TTL Exceed\n");
 		return TTL_EXCEEDED;
 	}
-
+	/* check ip_dst or gw*/
+		uint32_t target_dst;
+		if(rt->metric > 0){
+			target_dst = rt->gw.s_addr;
+			rt = longest_prefix(sr, target_dst);
+		}else{
+			target_dst = ip_hdr-> ip_dst;
+		}
 	/* look up in the routing table*/
 	struct sr_if* interface;
 	struct sr_arpreq *temp;
 	interface = sr_get_interface(sr, rt->interface);
 	struct sr_arpentry* entry;
-	/* check ip_dst or gw*/
-	uint32_t target_dst;
-	if(rt->metric > 0){
-		target_dst = rt->gw.s_addr;
-	}else{
-		target_dst = ip_hdr-> ip_dst;
-	}
+
 	entry = sr_arpcache_lookup(&sr->cache, target_dst);
 	if (entry) {
 		memcpy(ether_hdr->ether_shost, interface->addr, ETHER_ADDR_LEN);
@@ -440,25 +447,40 @@ void sr_handlepacket(struct sr_instance* sr,
 		for (interface = sr->if_list; interface != NULL; interface = interface->next){
 			if (interface->ip == ip_hdr->ip_dst) { /*sent to me*/
 				printf("Send to me\n");
+				struct sr_rt *rt = longest_prefix(sr, ip_hdr->ip_dst);
+				if (rt == NULL){
+					printf("Destination Net Unreachable\n");
+					return;}
+				printf("routing table entry for %s has metric %d\n", rt->interface, rt->metric);
+				if (rt->metric > 15){
+					send_icmp_error(sr, htons(ip_hdr->ip_id) + 1, ip_hdr, htons(ip_hdr->ip_len) + sizeof(sr_icmp_hdr_t), DEST_NET_UNREACHABLE, ip_hdr->ip_src, ether_hdr->ether_shost);
+					return;
+				}
 				if (ip_hdr->ip_p == ip_protocol_icmp) {/* is icmp message */
-					/*first check*/
-					if(len<sizeof(sr_icmp_hdr_t)){
-						return;
-					}
-					sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-					if(cksum(icmp_hdr, len) != 0xFFFF){
-						return;
-					}
-					if (icmp_hdr->icmp_type != 8) {
-						/* There is an error in the network*/
-						return;
-					}
-					send_icmp_reply(sr, htons(ip_hdr->ip_id) + 1, icmp_hdr->unused, packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t), htons(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t),
-									ether_hdr->ether_dhost, ether_hdr->ether_shost, ip_hdr->ip_dst, ip_hdr->ip_src);
+						/*first check*/
+					printf("Is icmp message\n");
+						if(len<sizeof(sr_icmp_hdr_t)){
+							printf("length too short \n");
+							return;
+						}
+						sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+						if(cksum(icmp_hdr, len) != 0xFFFF){
+							printf("checksum incorrect\n");
+							return;
+						}
+						if (icmp_hdr->icmp_type != 8) {
+							/* There is an error in the network*/
+							printf("there is an error in the network\n");
+							return;
+						}
+						send_icmp_reply(sr, htons(ip_hdr->ip_id) + 1, icmp_hdr->unused, packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t), htons(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t),
+										ether_hdr->ether_dhost, ether_hdr->ether_shost, ip_hdr->ip_dst, ip_hdr->ip_src);
+						printf("sent icmp reply\n");
 				} else if (ip_hdr->ip_p == ip_protocol_tcp || ip_hdr->ip_p == ip_protocol_udp) {
-					/* is tcp or udp*/
-					/* print unreachable */
-					send_icmp_error(sr, htons(ip_hdr->ip_id) + 1, packet + sizeof(sr_ethernet_hdr_t), htons(ip_hdr->ip_len) + sizeof(sr_icmp_hdr_t), PORT_UNREACHABLE, ip_hdr->ip_src, ether_hdr->ether_shost);
+						/* is tcp or udp*/
+						/* print unreachable */
+						send_icmp_error(sr, htons(ip_hdr->ip_id) + 1, packet + sizeof(sr_ethernet_hdr_t), htons(ip_hdr->ip_len) + sizeof(sr_icmp_hdr_t), PORT_UNREACHABLE, ip_hdr->ip_src, ether_hdr->ether_shost);
+						printf("sent icmp error\n");
 				}
 				return;
 			}
