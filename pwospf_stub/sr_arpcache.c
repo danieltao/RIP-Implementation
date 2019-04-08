@@ -29,7 +29,7 @@ void send_all_exceptions(struct sr_instance *sr,
 	send_all_exceptions(sr, packet->next);
 	sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet->buf + sizeof(sr_ethernet_hdr_t));
 	sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)(packet->buf);
-	send_icmp_error(sr, ip_hdr->ip_src, ether_hdr->ether_shost, htons(ip_hdr->ip_id) + 1, packet->buf + sizeof(sr_ethernet_hdr_t), htons(ip_hdr->ip_len), DEST_HOST_UNREACHABLE);
+	send_icmp_error(sr, htons(ip_hdr->ip_id) + 1, packet->buf + sizeof(sr_ethernet_hdr_t), htons(ip_hdr->ip_len), DEST_HOST_UNREACHABLE,ip_hdr->ip_src, ether_hdr->ether_shost);
 }
 
 

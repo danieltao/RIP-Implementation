@@ -435,7 +435,8 @@ int sr_read_from_server_expect(struct sr_instance* sr /* borrowed */, int expect
                     len - sizeof(c_packet_ethernet_header) +
                     sizeof(struct sr_ethernet_hdr),
                     (char*)(buf + sizeof(c_base))) )
-            { break; }
+            { 	printf("ARP dropped here \n");
+            	break; }
             int packet_length = len - sizeof(c_packet_ethernet_header) +
                     sizeof(struct sr_ethernet_hdr);
             char* buf2 = (char* )buf+sizeof(c_packet_header);
@@ -671,7 +672,6 @@ int  sr_arp_req_not_for_us(struct sr_instance* sr,
 
     if (len < sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr) )
     { return 0; }
-
     assert(iface);
 
     e_hdr = (struct sr_ethernet_hdr*)packet;

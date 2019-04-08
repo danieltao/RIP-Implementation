@@ -250,7 +250,7 @@ uint16_t udp_checksum(const void *buff, size_t len, in_addr_t src_addr, in_addr_
 void *sr_rip_timeout(void *sr_ptr) {
     struct sr_instance *sr = sr_ptr;
     while (1) {
-        sleep(5);
+        sleep(500);
         printf("-------------------Called rip timeout-----------------------\n");
         pthread_mutex_lock(&(sr->rt_lock));
         /*send the RIP response packets periodically. check the routing table and remove expired route entry. If a route entry is not updated in 20 seconds, we will think it is expired. */
@@ -264,7 +264,7 @@ void *sr_rip_timeout(void *sr_ptr) {
 			continue;
 		}
 
-		int expiretime = 20;
+		int expiretime = 2000;
 
 		rt_walker_prev = sr->routing_table;
 		while(rt_walker_prev->updated_time + expiretime < now){

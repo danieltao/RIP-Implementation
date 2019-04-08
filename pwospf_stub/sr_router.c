@@ -98,34 +98,51 @@ int send_arp_request(struct sr_instance* sr, uint32_t dest_ip)
 	struct sr_rt *rt;
 	rt = longest_prefix(sr, dest_ip);
 	if (rt == NULL){
+		printf("RT is NUll\n");
 		return DEST_NET_UNREACHABLE;
+	}
+
+	/* if rt not in the same subnet, transfer to gw instead*/
+	if (rt->metric != 0){
+		dest_ip = rt->gw.s_addr;
 	}
 
 	struct sr_if* interface;
 	interface = sr_get_interface(sr, rt->interface);
 
-	sr_arp_hdr_t *arp_packet;
+	struct sr_arp_hdr *arp_packet;
 	arp_packet = (sr_arp_hdr_t*) malloc(sizeof(sr_arp_hdr_t));
 	arp_packet->ar_hrd = htons(arp_hrd_ethernet);
 	arp_packet->ar_hln = ETHER_ADDR_LEN;
-	arp_packet->ar_pln = sizeof(uint32_t);
+	arp_packet->ar_pln = 4/*IP_ADDR_LEN*/;
 	arp_packet->ar_op = htons(arp_op_request);
 	memcpy(arp_packet->ar_sha, interface->addr, ETHER_ADDR_LEN);
-	memset(arp_packet->ar_tha, 255, ETHER_ADDR_LEN);
 	arp_packet->ar_pro = htons(arp_pro_ip);
 	arp_packet->ar_sip = interface->ip;
 	arp_packet->ar_tip = dest_ip;
 
 	/* pack to ethernet*/
-	sr_ethernet_hdr_t *ether_packet;
+	struct sr_ethernet_hdr *ether_packet;
 	ether_packet = (sr_ethernet_hdr_t*) malloc(sizeof(sr_ethernet_hdr_t));
-	memcpy(ether_packet->ether_shost, interface->addr, ETHER_ADDR_LEN);
-	memset(ether_packet->ether_dhost, 255, ETHER_ADDR_LEN);
+	memcpy(ether_packet->ether_shost, sr_get_interface(sr, interface->name)->addr, ETHER_ADDR_LEN);
+	/*memset(ether_packet->ether_dhost, 255, ETHER_ADDR_LEN);
+	*/
+	int i;
+	for (i = 0; i < ETHER_ADDR_LEN; i++) {
+			ether_packet->ether_dhost[i] = 255;
+	}
 	ether_packet->ether_type = htons(ethertype_arp);
+	int j;
+	printf("ether packet destination is ");
+	for (j=0;j<ETHER_ADDR_LEN;j++){
+		printf("%x", ether_packet->ether_dhost[j]);
+	}
+	printf("\n");
 
 	uint8_t* packet = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t));
 	memcpy(packet, ether_packet, sizeof(sr_ethernet_hdr_t));
 	memcpy(packet + sizeof(sr_ethernet_hdr_t), arp_packet, sizeof(sr_arp_hdr_t));
+	printf("Request Sent. The longest rt for dest ip %x is %s\n", dest_ip, rt->interface);
 
 	sr_send_packet(sr, packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), rt->interface);
 	free(arp_packet);
@@ -142,6 +159,7 @@ void send_arp_reply(struct sr_instance* sr,
 		uint8_t dest_mac[ETHER_ADDR_LEN])
 {
 	sr_arp_hdr_t *arp_packet;
+	printf("Reply sent\n");
 	arp_packet = (sr_arp_hdr_t*) malloc(sizeof(sr_arp_hdr_t));
 	arp_packet->ar_pro = htons(arp_pro_ip);
 	arp_packet->ar_hln = ETHER_ADDR_LEN;
@@ -301,7 +319,7 @@ void send_icmp_error(struct sr_instance* sr,
 int forward(struct sr_instance *sr,
 		uint8_t* pac,
 		uint32_t len) {
-	printf("Forwarding...");
+	printf("Forwarding...\n");
 	uint8_t *packet = malloc(len);
 	memcpy(packet, pac, len);
 	sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *) packet;
@@ -309,10 +327,13 @@ int forward(struct sr_instance *sr,
 
 	/* check a bunch of things*/
 	struct sr_rt *rt = longest_prefix(sr, ip_hdr->ip_dst);
-	if (rt == NULL)
-		return DEST_NET_UNREACHABLE;
-	if (ip_hdr->ip_ttl == 1)
+	if (rt == NULL){
+		printf("Destination Unreachable\n");
+		return DEST_NET_UNREACHABLE;}
+	if (ip_hdr->ip_ttl == 1){
+		printf("TTL Exceed\n");
 		return TTL_EXCEEDED;
+	}
 
 	/* look up in the routing table*/
 	struct sr_if* interface;
@@ -325,26 +346,32 @@ int forward(struct sr_instance *sr,
 		memcpy(ether_hdr->ether_dhost, entry->mac, ETHER_ADDR_LEN);
 	} else {
 		temp = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, packet, len, rt->interface);
-		time_t curr = time(NULL);
+		time_t curr;
+		time(&curr);
+		printf("Put ARP request on queue\n");
 		if (difftime(curr, temp->sent) >=1)	{
 			if (temp->times_sent >= 5) {
+				printf("Sending all exceptions!!!\n");
+				fflush(stdout);
 				send_all_exceptions(sr, temp->packets);
 				sr_arpreq_destroy(&(sr->cache), temp);
 			} else {
+				printf("temp ip is %x\n", temp->ip);
 				int res = send_arp_request(sr, temp->ip);
 				if (res != 0) {
+					printf("Request unsuccessfully failed \n");
 					struct sr_packet* packet;
 					for (packet = temp->packets; packet != NULL; packet = packet->next) {
 						sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)(packet->buf);
 						sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet->buf + sizeof(sr_ethernet_hdr_t));
 						send_icmp_error(sr, htons(ip_hdr->ip_id) + 1, sizeof(sr_ethernet_hdr_t)+packet->buf, htons(ip_hdr->ip_len), res, ip_hdr->ip_src, ether_hdr->ether_shost);
-					}
+						}
 					sr_arpreq_destroy(&(sr->cache), temp);
-				}
+					}
 				temp->sent = curr;
 				temp->times_sent++;
-					}
-				}
+				}}
+
 		return 0;
 	}
 
@@ -364,12 +391,13 @@ void sr_handlepacket(struct sr_instance* sr,
         unsigned int len,
         char* interface /* lent */)
 {
+	printf("handling packet received from interface %s \n", interface);
 	assert(sr);
 	assert(packet);
 	assert(interface);
 
 	char* iface = interface;
-	printf("handling packet received from interface %s \n", iface);
+
 	fflush(stdout);
 
 	sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)packet;
@@ -444,7 +472,8 @@ void sr_handlepacket(struct sr_instance* sr,
 		struct sr_if * interface;
 		for (interface = sr->if_list; interface != NULL; interface = interface->next){
 			if (interface->ip == arp_hdr->ar_tip) {/* if it is sent to me*/
-				if (arp_hdr->ar_op == htons(arp_op_request)) {/* if it is a request*/
+ 				if (arp_hdr->ar_op == htons(arp_op_request)) {/* if it is a request*/
+
 					send_arp_reply(sr, arp_hdr->ar_tip, arp_hdr->ar_sip, interface->addr, arp_hdr->ar_sha);
 				} else {
 					/* if it is a reply*/
@@ -460,6 +489,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		/* it is not sent to me*/
 		/* forward the package to its destination*/
 		struct sr_rt *rt = longest_prefix(sr, arp_hdr->ar_tip);
+		printf("forwarding to next hop\n");
 		sr_send_packet(sr, packet, temp_len, rt->interface);
 	}
 		printf("*** -> Received packet of length %d \n",len);
